@@ -5,7 +5,7 @@ class Recipe(models.Model):
     title      = models.CharField(max_length=200, blank=True, null=True)
     detail     = models.CharField(max_length=5000, blank=True, null=True)
     image_url  = models.CharField(max_length=500, blank=True, null=True)
-    view_count = models.IntegerField(default=0)
+    view_count = models.PositiveIntegerField(default=0)
     del_yn     = models.BooleanField(default=False)
     ins_date   = models.DateTimeField(auto_now_add=True)
     upd_date   = models.DateTimeField(auto_now=True)

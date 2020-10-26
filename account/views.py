@@ -43,7 +43,7 @@ class SignUpView(View):
         except ValidationError:
             return HttpResponse(status = 400)
         except KeyError:
-            return JsonResponse({'message' : 'INVALID KEY'}, status = 400)
+            return JsonResponse({'message':'INVALID KEY'}, status = 400)
 
 # 로그인
 class SignInView(View):
@@ -56,12 +56,12 @@ class SignInView(View):
                 if user.del_yn == False:
                     if bcrypt.checkpw(data['password'].encode('utf-8'), user.password.encode('utf-8')):
                         token = jwt.encode({'id':user.id}, SECRET_KEY, algorithm = ALGORITHM).decode('utf-8')
-                        return JsonResponse({'token' : token}, status = 200)
+                        return JsonResponse({'token':token}, status = 200)
                     return HttpResponse(status = 400)
                 return HttpResponse(status = 401)
             return HttpResponse(status = 400)
         except KeyError:
-            return JsonResponse({'message' : 'INVALID KEY'}, status = 400)
+            return JsonResponse({'message':'INVALID KEY'}, status = 400)
 
 # 로그아웃
 
