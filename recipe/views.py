@@ -7,27 +7,46 @@ from account.models import Account
 from recipe.models import Recipe, RecipeLike, Comment, ReComment
 
 # 메인페이지
-# recipe부터 출발
-class RecipeListView(View):
+class MainPageView(View):
     def get(self, request):
-        food_recipe = 
+        # food_recipe
+        food_recipe = Recipe.objects.prefetch_related('account', 'recipelike_set', 'comment_set', 'recomment_set').filter(del_yn=False)[::-1]
         recipe_list = [
             {
-                'nickname'           : recipe.nickname,
-                'recipe_title'       : [
-                    recipe_detail.title for recipe_detail in recipe.recipe_set.all()
-                ],
-                'recipe_image'       : [
-                    recipe_detail.image_url for recipe_detail in recipe.recipe_set.all()
-                ],
-                'recipe_view_ count' : [
-                    recipe_detail.view_count for recipe_detail in recipe.recipe_set.all()
-                ],
-                'recipe_like'        : ,
+                'nickname'             : recipe.account.nickname,
+                'recipe_title'         : recipe.title,
+                'recipe_image'         : recipe.image_url,
+                'recipe_view_count'    : recipe.view_count,
+                'recipe_like_count'    : recipe.recipelike_set.filter(like_yn=True).count(),
+                'recipe_comment_count' : (recipe.comment_set.filter(del_yn=False).count()) + (recipe.recomment_set.filter(del_yn=False).count()),
             }for recipe in food_recipe
         ]
+        return JsonResponse({'recipe_list':recipe_list}, status=200)
 
 # 상세페이지
+class DetailPageView(View):
+    def get(self, request):
+        # food_recipe
+        recipe = request.GET.get('recipe')
+        food_recipe = Recipe.objects.filter(del_yn=False) and Recipe.objects.prefetch_related('account', 'recipelike_set', 'comment_set__recomment_set').get(id=recipe)
+        recipe_detail = {
+                'nickname'          : food_recipe.account.nickname,
+                'recipe_title'      : food_recipe.title,
+                'recipe_image'      : food_recipe.image_url,
+                'recipe_detail'     : food_recipe.detail,
+                'recipe_view_count' : food_recipe.view_count,
+                'recipe_like_count' : food_recipe.recipelike_set.filter(like_yn=True).count(),
+        }
+        # comment
+        recipe_comment = [
+            {
+                'comment_nickname'   : comment.account.nickname,
+                'comment'            : comment.content,
+                'recomment_nickname' : [recomment.account.nickname for recomment in comment.recomment_set.filter(del_yn=False)],
+                'recomment'          : [recomment.content for recomment in comment.recomment_set.filter(del_yn=False)],
+            }for comment in food_recipe.comment_set.filter(del_yn=False)
+        ]
+        return JsonResponse({'recipe_detail':recipe_detail, 'recipe_comment':recipe_comment}, status=200)
 
 # 게시글 작성
 
@@ -52,3 +71,5 @@ class RecipeListView(View):
 # 게시글 좋아요 취소
 
 # 레시피 검색
+
+# 조회수
