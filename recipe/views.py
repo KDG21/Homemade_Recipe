@@ -14,11 +14,12 @@ class MainPageView(ListView):
     @login_check
     def get(self, request):
         paginate_by = 10
+
         # food_recipe
         food_recipe = Recipe.objects.prefetch_related('account', 'recipelike_set', 'comment_set', 'recomment_set').filter(del_yn=False)[::-1]
         recipe_list = [
             {
-                'nickname'             : recipe.account.nickname,
+                'recipe_nickname'      : recipe.account.nickname,
                 'recipe_title'         : recipe.title,
                 'recipe_image'         : recipe.image_url,
                 'recipe_view_count'    : recipe.view_count,
@@ -32,12 +33,17 @@ class MainPageView(ListView):
 class DetailPageView(View):
     @login_check
     def get(self, request):
+        # 조회수
+        recipe_id = request.GET.get('recipe_id')
+        recipe = Recipe.objects.get(id=recipe_id)
+        recipe.view_count = recipe.view_count + 1
+        recipe.save()
+
         # food_recipe
-        recipe = request.GET.get('recipe')
-        food_recipe = Recipe.objects.filter(del_yn=False) and Recipe.objects.prefetch_related('account', 'recipelike_set', 'comment_set__recomment_set').get(id=recipe)
+        food_recipe = Recipe.objects.filter(del_yn=False) and Recipe.objects.prefetch_related('account', 'recipelike_set', 'comment_set__recomment_set').get(id=recipe_id)
         recipe_detail = {
-            'id'                : food_recipe.id,
-            'nickname'          : food_recipe.account.nickname,
+            'recipe_id'         : food_recipe.id,
+            'recipe_nickname'   : food_recipe.account.nickname,
             'recipe_title'      : food_recipe.title,
             'recipe_image'      : food_recipe.image_url,
             'recipe_detail'     : food_recipe.detail,
@@ -47,8 +53,10 @@ class DetailPageView(View):
         # comment
         recipe_comment = [
             {
+                'comment_id'         : comment.id,
                 'comment_nickname'   : comment.account.nickname,
                 'comment'            : comment.content,
+                'recomment_id'       : [recomment.id for recomment in comment.recomment_set.filter(del_yn=False)],
                 'recomment_nickname' : [recomment.account.nickname for recomment in comment.recomment_set.filter(del_yn=False)],
                 'recomment'          : [recomment.content for recomment in comment.recomment_set.filter(del_yn=False)],
             }for comment in food_recipe.comment_set.filter(del_yn=False)
@@ -56,7 +64,7 @@ class DetailPageView(View):
         return JsonResponse({'recipe_detail':recipe_detail, 'recipe_comment':recipe_comment}, status=200)
 
 # 게시글 작성
-class RecipeView(View):
+class RecipeCreateView(View):
     @login_check
     def post(self, request):
         account = Account.objects.get(id=request.user.id)
@@ -71,29 +79,34 @@ class RecipeView(View):
 class RecipeDeleteView(View):
     @login_check
     def post(self, request):
-        Recipe.objects.filter(id=request.GET.get('recipe')).update(
-            del_yn   = True,
-            upd_date = timezone.now()
-        )
-        return HttpResponse(status=200)
-        
+        if Recipe.objects.filter(id=request.GET.get('recipe_id'), account_id=request.user.id).exists():
+            Recipe.objects.filter(id=request.GET.get('recipe_id')).update(
+                del_yn   = True,
+                upd_date = timezone.now()
+            )
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=400)
 # 게시글 수정
-class CommentUpdateView(View):
+class RecipeUpdateView(View):
     @login_check
     def post(self, request):
-        Recipe.objects.filter(id=request.GET.get('recipe')).update(
-            title    = request.POST.get('title'),
-            detail   = request.POST.get('detail'),
-            upd_date = timezone.now()
-        )
-        return HttpResponse(status=200)
+        if Recipe.objects.filter(id=request.GET.get('recipe_id'), account_id=request.user.id).exists():
+            Recipe.objects.filter(id=request.GET.get('recipe_id')).update(
+                title    = request.POST.get('title'),
+                detail   = request.POST.get('detail'),
+                upd_date = timezone.now()
+            )
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=400)
 
 # 댓글 작성
 class CommentCreateView(View):
     @login_check
     def post(self, request):
         account = Account.objects.get(id=request.user.id)
-        recipe = Recipe.objects.get(id=request.GET.get('recipe'))
+        recipe = Recipe.objects.get(id=request.GET.get('recipe_id'))
         Comment.objects.create(
             account  = account,
             recipe   = recipe,
@@ -105,28 +118,33 @@ class CommentCreateView(View):
 class CommentDeleteView(View):
     @login_check
     def post(self, request):
-        Comment.objects.filter(id=request.POST.get('comment_id')).update(
-            del_yn   = True,
-            upd_date = timezone.now()
-        )
-        return HttpResponse(status=200)
+        if Comment.objects.filter(id=request.POST.get('comment_id'), account_id=request.user.id).exists():
+            Comment.objects.filter(id=request.POST.get('comment_id')).update(
+                del_yn   = True,
+                upd_date = timezone.now()
+            )
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=400)
 
 # 댓글 수정
 class CommentUpdateView(View):
     @login_check
     def post(self, request):
-        Comment.objects.filter(id=request.POST.get('comment_id')).update(
-            content  = request.POST.get('content'),
-            upd_date = timezone.now()
-        )
-        return HttpResponse(status=200)
-
-# 대댓글 작성
+        if Comment.objects.filter(id=request.POST.get('comment_id'), account_id=request.user.id).exists():
+            Comment.objects.filter(id=request.POST.get('comment_id')).update(
+                content  = request.POST.get('content'),
+                upd_date = timezone.now()
+            )
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=400)
+# 대댓글 작성            
 class ReCommentCreateView(View):
     @login_check
     def post(self, request):
         account = Account.objects.get(id=request.user.id)
-        recipe = Recipe.objects.get(id=request.GET.get('recipe'))
+        recipe = Recipe.objects.get(id=request.GET.get('recipe_id'))
         comment = Comment.objects.get(id=request.POST.get('comment_id'))
         ReComment.objects.create(
             account  = account,
@@ -140,21 +158,27 @@ class ReCommentCreateView(View):
 class ReCommentDeleteView(View):
     @login_check
     def post(self, request):
-        ReComment.objects.filter(id=request.POST.get('recomment_id')).update(
-            del_yn   = True,
-            upd_date = timezone.now()
-        )
-        return HttpResponse(status=200)
+        if ReComment.objects.filter(id=request.POST.get('recomment_id'), account_id=request.user.id).exists():
+            ReComment.objects.filter(id=request.POST.get('recomment_id')).update(
+                del_yn   = True,
+                upd_date = timezone.now()
+            )
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=400)
 
 # 대댓글 수정
 class ReCommentUpdateView(View):
     @login_check
     def post(self, request):
-        ReComment.objects.filter(id=request.POST.get('recomment_id')).update(
-            content  = request.POST.get('content'),
-            upd_date = timezone.now()
-        )
-        return HttpResponse(status=200)
+        if ReComment.objects.filter(id=request.POST.get('recomment_id'), account_id=request.user.id).exists():
+            ReComment.objects.filter(id=request.POST.get('recomment_id')).update(
+                content  = request.POST.get('content'),
+                upd_date = timezone.now()
+            )
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=400)
 
 # 게시글 좋아요
 class RecipeLikeView(View):
@@ -184,5 +208,3 @@ class RecipeLikeView(View):
             return HttpResponse(status=200)
 
 # 레시피 검색
-
-# 조회수
