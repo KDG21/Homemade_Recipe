@@ -11,6 +11,7 @@ from django.views import View
 from homemade_recipe.settings import SECRET_KEY, ALGORITHM
 
 from account.models import Account
+from account.utils import login_check
 
 # 회원가입
 class SignUpView(View):
@@ -63,8 +64,15 @@ class SignInView(View):
         except KeyError:
             return JsonResponse({'message':'INVALID KEY'}, status = 400)
 
+# 마이페이지
+class MyPage(View):
+    @login_check
+    def get(self, request):
+        account = {
+            'account_nickname' : Account.objects.get(id=request.user.id).nickname
+        }
+        return JsonResponse({'account':account}, status=200)
+        
 # 로그아웃
 
 # 회원정보수정
-
-# 마이페이지
