@@ -4,10 +4,12 @@ from django.utils import timezone
 from django.views import View
 from django.http  import JsonResponse,HttpResponse
 from django.views.generic import ListView
+from django.db.models import Q
 
 from account.models import Account
 from account.utils import login_check
 from recipe.models import Recipe, RecipeLike, Comment, ReComment
+# from homemade_recipe.settings import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 
 # 메인페이지
 class MainPageView(ListView):
@@ -67,11 +69,36 @@ class DetailPageView(View):
 class RecipeCreateView(View):
     @login_check
     def post(self, request):
+        # image
+        # s3_client = boto3.client(
+        #     "s3",
+        #     aws_access_key_id=AWS_ACCESS_KEY_ID,
+        #     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        # )
+
+        # image = request.FILES["filename"]
+        # image_time = (str(datetime.now())).replace(" ", "")
+        # image_type = (image.content_type).split("/")[1]
+        # s3_client.upload_fileobj(
+        #     image,
+        #     "homemade_recipe",
+        #     image_time + "." + image_type,
+        #     ExtraArgs={"ContentType": image.content_type},
+        # )
+        # image_url = (
+        #     "http://homemade_recipe.s3.ap-northeast-2.amazonaws.com/"
+        #     + image_time
+        #     + "."
+        #     + image_type
+        # )
+        # image_url = image_url.replace(" ", "/")
+
         account = Account.objects.get(id=request.user.id)
         Recipe.objects.create(
-            account = account,
-            title   = request.POST.get('title'),
-            detail  = request.POST.get('detail'),
+            account   = account,
+            title     = request.POST.get('title'),
+            detail    = request.POST.get('detail'),
+            # image_url = image_url,
         )
         return HttpResponse(status=200)
 
@@ -87,14 +114,40 @@ class RecipeDeleteView(View):
             return HttpResponse(status=200)
         else:
             return HttpResponse(status=400)
+
 # 게시글 수정
 class RecipeUpdateView(View):
     @login_check
     def post(self, request):
         if Recipe.objects.filter(id=request.GET.get('recipe_id'), account_id=request.user.id).exists():
+                # image
+            # s3_client = boto3.client(
+            #     "s3",
+            #     aws_access_key_id=AWS_ACCESS_KEY_ID,
+            #     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            # )
+
+            # image = request.FILES["filename"]
+            # image_time = (str(datetime.now())).replace(" ", "")
+            # image_type = (image.content_type).split("/")[1]
+            # s3_client.upload_fileobj(
+            #     image,
+            #     "homemade_recipe",
+            #     image_time + "." + image_type,
+            #     ExtraArgs={"ContentType": image.content_type},
+            # )
+            # image_url = (
+            #     "http://homemade_recipe.s3.ap-northeast-2.amazonaws.com/"
+            #     + image_time
+            #     + "."
+            #     + image_type
+            # )
+            # image_url = image_url.replace(" ", "/")
+
             Recipe.objects.filter(id=request.GET.get('recipe_id')).update(
-                title    = request.POST.get('title'),
-                detail   = request.POST.get('detail'),
+                title     = request.POST.get('title'),
+                detail    = request.POST.get('detail'),
+                # image_url = image_url,
                 upd_date = timezone.now()
             )
             return HttpResponse(status=200)
@@ -139,6 +192,7 @@ class CommentUpdateView(View):
             return HttpResponse(status=200)
         else:
             return HttpResponse(status=400)
+
 # 대댓글 작성            
 class ReCommentCreateView(View):
     @login_check
@@ -184,8 +238,8 @@ class ReCommentUpdateView(View):
 class RecipeLikeView(View):
     @login_check
     def post(self, request):
-        account = request.user.id
-        recipe = Recipe.objects.get(id=request.POST.get('recipe_id'))
+        account = Account.objects.get(id=request.user.id)
+        recipe = Recipe.objects.get(id=request.GET.get('recipe_id'))
         if RecipeLike.objects.filter(account=account, recipe=recipe, like_yn=True).exists():
             RecipeLike.objects.filter(account=account, recipe=recipe, like_yn=True).update(
                 like_yn  = False,
@@ -194,17 +248,36 @@ class RecipeLikeView(View):
             return HttpResponse(status=200)
 
         if RecipeLike.objects.filter(account=account, recipe=recipe, like_yn=False).exists():
-            RecipeLike.objects.filter(account=account, recipe=recipe, like_yn=True).update(
+            RecipeLike.objects.filter(account=account, recipe=recipe, like_yn=False).update(
                 like_yn  = True,
                 upd_date = timezone.now()
             )
             return HttpResponse(status=200)
 
-        if not RecipeLike.objects.filter(account=account, recipe=recipe).exists():
-            RecipeLike.objects.filter(account=account, recipe=recipe, like_yn=True).update(
+        else:
+            RecipeLike.objects.create(
+                account  = account,
+                recipe   = recipe,
                 like_yn  = True,
                 upd_date = timezone.now()
             )
             return HttpResponse(status=200)
 
 # 레시피 검색
+class RecipeSearchView(View):
+    def get(self, request):
+        if Recipe.objects.filter(del_yn=False):
+            if 'q' in request.GET:
+                query = request.GET.get('q', None)
+                food_recipe = Recipe.objects.prefetch_related('account', 'recipelike_set', 'comment_set', 'recomment_set').filter(Q(title__contains=query))
+                recipe_search = [
+                    {
+                        'recipe_nickname'      : recipe.account.nickname,
+                        'recipe_title'         : recipe.title,
+                        'recipe_image'         : recipe.image_url,
+                        'recipe_view_count'    : recipe.view_count,
+                        'recipe_like_count'    : recipe.recipelike_set.filter(like_yn=True).count(),
+                        'recipe_comment_count' : (recipe.comment_set.filter(del_yn=False).count()) + (recipe.recomment_set.filter(del_yn=False).count()),
+                    }for recipe in food_recipe
+                ]
+                return JsonResponse({'recipe_search':recipe_search}, status=200)
