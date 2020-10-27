@@ -1,7 +1,6 @@
 import json
 import bcrypt
 import jwt
-# import requests
 
 from django.http import HttpResponse, JsonResponse
 from django.core.validators import validate_email, RegexValidator
